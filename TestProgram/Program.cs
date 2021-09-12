@@ -5,11 +5,19 @@ using TestProgram.utils;
 using TestProgram.config;
 using System;
 using OpenTK.Windowing.Common.Input;
+using System.Diagnostics;
+using System.Text;
+using System.Threading;
 
 namespace TestProgram {
     class Program {
         static void Main(string[] args) {
+            Stopwatch watch = new Stopwatch();
+            watch.Start();
+
             Window window = new Window();
+
+            StringBuilder console = new StringBuilder();
 
             bool isOpen = true;
             window.addCloseListener((e) => {
@@ -17,27 +25,14 @@ namespace TestProgram {
             });
 
             Config config = new Config();
-            if (checkExistence("config.json")) {
-                config.load(fastJSON5.JSON5.ToDynamic(readFile("config.json")));
-            }
-            write("config.json", config.asJson());
+            if (checkExistence("config.json")) config.load(fastJSON5.JSON5.ToDynamic(readFile("config.json")));
+            else write("config.json", config.asJson()); // no point in writing the file during init if it does exist
 
+            window.allowVsync(config.useVSync);
             window.setSize(config.defaultSize.x, config.defaultSize.y);
 
             window.grabContext();
-            /*VertexBuilder<float> builder = new VertexBuilder<float>(0);
-            {
-                builder.position(-1, -1, 0, 1).color(config.backgroundColor.red, config.backgroundColor.green, config.backgroundColor.blue, config.backgroundColor.alpha).texture(0, 0).endVertex();
-                builder.position( 1, -1, 0, 1).color(config.backgroundColor.red, config.backgroundColor.green, config.backgroundColor.blue, config.backgroundColor.alpha).texture(1, 0).endVertex();
-                builder.position( 1,  1, 0, 1).color(config.backgroundColor.red, config.backgroundColor.green, config.backgroundColor.blue, config.backgroundColor.alpha).texture(1, 1).endVertex();
-
-                builder.position( 1,  1, 0, 1).color(config.backgroundColor.red, config.backgroundColor.green, config.backgroundColor.blue, config.backgroundColor.alpha).texture(1, 1).endVertex();
-                builder.position(-1,  1, 0, 1).color(config.backgroundColor.red, config.backgroundColor.green, config.backgroundColor.blue, config.backgroundColor.alpha).texture(0, 1).endVertex();
-                builder.position(-1, -1, 0, 1).color(config.backgroundColor.red, config.backgroundColor.green, config.backgroundColor.blue, config.backgroundColor.alpha).texture(0, 0).endVertex();
-            }*/
-            //VertexArrayObject vaoBackground;
-            //VertexBufferObject vboBackground;
-            //VertexBufferObject vboLeftPanel;
+            window.setFrequency(60);
             ShaderProgram program;
             {
                 writeIfNotExist("shader.vsh", "#version 330 core\nin vec4 position;\n in vec4 col;\n\nout vec4 color;\n\nvoid main() {\n\tgl_Position = position;\n\tcolor = col;\n}\n");
@@ -49,7 +44,6 @@ namespace TestProgram {
                 program.link();
                 program.getUniformLocation("projectionMatrix");
             }
-            VertexArrayHelper background = generateVAO(1, config.secondaryBackgroundColor, program);
             VertexArrayHelper leftPanel = generateVAO(config.layout.leftPanelSize, config.backgroundColor, program);
             VertexArrayHelper rightPanel = generateVAO(config.layout.rightPanelSize, config.backgroundColor, program);
 
@@ -60,8 +54,19 @@ namespace TestProgram {
             bool isScalingLeftPanel = false;
             bool isScalingRightPanel = false;
 
+            window.grabContext();
+
+            watch.Stop();
+            Console.WriteLine(1 / (watch.Elapsed.TotalMilliseconds / 1000));
+            Console.WriteLine("AAAA");
+
+            double lastFrame = 0;
+
             while (isOpen) {
-                window.grabContext();
+                double sleepTime = (1d / config.targetFPS) * 1000d + lastFrame;
+
+                watch = new Stopwatch();
+                watch.Start();
 
                 bool defaultCursor = true;
 
@@ -71,17 +76,12 @@ namespace TestProgram {
 
                 GL.Viewport(0, 0, window.getWidth(), window.getHeight());
 
-                GL.ClearColor(0, 0.5f, 0, 0);
+                GL.ClearColor(config.secondaryBackgroundColor.red / 255f, config.secondaryBackgroundColor.green / 255f, config.secondaryBackgroundColor.blue / 255f, config.secondaryBackgroundColor.alpha / 255f);
                 GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
                 program.start();
 
                 Matrix4 matrix = Matrix4.identity();
-                program.uniformMatrix4("projectionMatrix", matrix.toArray());
-
-                background.draw(PrimitiveType.Triangles);
-
                 matrix = matrix.multiply(Matrix4.createTranslationMatrix(new Vector4(window.getWidth() / -100f + 1, 0, 0, 1)));
-//                matrix = matrix.multiply(Matrix4.createTranslationMatrix(new Vector4(1, 0, 0, 1)));
                 Matrix4 scaledMatrix = matrix.multiply(Matrix4.createScaleMatrix(new Vector4(1f / window.getWidth() * 100, 1, 1, 1)));
 
                 Vector4 leftPanelX = scaledMatrix.transform(new Vector4(config.layout.leftPanelSize - 1, 0, 1, 1));
@@ -93,7 +93,7 @@ namespace TestProgram {
 
                     window.setCursor(MouseCursor.HResize);
                     defaultCursor = false;
-                    isScalingLeftPanel = window.isMouseButtonDown(0);
+                    isScalingLeftPanel = window.isMouseButtonDown(0) && !isScalingRightPanel;
                     
                     if (isScalingLeftPanel) {
                         leftPanel = generateVAO(size, config.backgroundColor, program);
@@ -110,7 +110,6 @@ namespace TestProgram {
                 scaledMatrix = matrix.multiply(Matrix4.createScaleMatrix(new Vector4(1f / window.getWidth() * 100, 1, 1, 1)));
 
                 Vector4 rightPanelX = scaledMatrix.transform(new Vector4(-1, 0, 1, 1));
-                Console.WriteLine(rightPanelX.x);
 
                 matrix = oldMatrix.multiply(Matrix4.createTranslationMatrix(new Vector4(window.getWidth() / 50f - config.layout.rightPanelSize * 2, 0, 0, 1)));
                 scaledMatrix = matrix.multiply(Matrix4.createScaleMatrix(new Vector4(1f / window.getWidth() * 100, 1, 1, 1)));
@@ -121,8 +120,9 @@ namespace TestProgram {
 
                     window.setCursor(MouseCursor.HResize);
                     defaultCursor = false;
-                    Console.WriteLine(size);
-                    isScalingRightPanel = window.isMouseButtonDown(0);
+                    console.Append("test");
+                    console.Append("test");
+                    isScalingRightPanel = window.isMouseButtonDown(0) && !isScalingLeftPanel;
 
                     if (isScalingRightPanel) {
                         rightPanel = generateVAO(size, config.backgroundColor, program);
@@ -137,11 +137,23 @@ namespace TestProgram {
                 if (defaultCursor) window.setCursor(MouseCursor.Default);
 
                 window.endFrame();
-                window.releaseContext();
+                //watch.Stop();
+                if (config.targetFPS > 0) {
+                    double time = sleepTime - watch.Elapsed.TotalMilliseconds;
+                    if (time > 0) {
+                        Thread.Sleep(TimeSpan.FromMilliseconds((sleepTime - watch.Elapsed.TotalMilliseconds) / 2));
+                        while (watch.Elapsed.TotalMilliseconds < sleepTime) {
+                            Thread.Sleep(TimeSpan.FromMilliseconds(0.001));
+                        }
+                    }
+                    double elapsed = watch.Elapsed.TotalMilliseconds;
+                    lastFrame = sleepTime - elapsed;
+                    Console.WriteLine(1 / (elapsed / 1000));
+                }
             }
+            window.releaseContext();
 
             window.grabContext();
-            background.delete();
             leftPanel.delete();
             rightPanel.delete();
             program.deleteAttached();
@@ -154,8 +166,8 @@ namespace TestProgram {
         public static VertexBufferObject generateVBO(float width, ColorValue color) {
             VertexBuilder<float> builder = new VertexBuilder<float>(0);
             {
-                Console.Write("W:");
-                Console.WriteLine(width * 2 - 1);
+                //Console.Write("W:");
+                //Console.WriteLine(width * 2 - 1);
                 builder.position(-1,             -1, 0, 1).color(color.red, color.green, color.blue, color.alpha).texture(0, 0).endVertex();
                 builder.position( width * 2 - 1, -1, 0, 1).color(color.red, color.green, color.blue, color.alpha).texture(1, 0).endVertex();
                 builder.position( width * 2 - 1,  1, 0, 1).color(color.red, color.green, color.blue, color.alpha).texture(1, 1).endVertex();

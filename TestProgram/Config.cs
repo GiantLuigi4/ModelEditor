@@ -14,17 +14,31 @@ namespace TestProgram {
         public ColorValue borderColor = new ColorValue(30, 32, 30, 255);
         public Vec2iValue defaultSize = new Vec2iValue(500, 500);
         public LayoutConfig layout = new LayoutConfig();
+        public int targetFPS = -1;
+        public bool useVSync = true;
 
         public string asJson() {
             StringBuilder builder = new StringBuilder();
 
-            builder.Append("{");
-
-            builder.Append("\"background\":").Append(backgroundColor.asJson()).Append(",");
-            builder.Append("\"foreground\":").Append(foregroundColor.asJson()).Append(",");
-            builder.Append("\"hovered\":").Append(hoveredColor.asJson()).Append(",");
-            builder.Append("\"border\":").Append(borderColor.asJson()).Append(",");
-            builder.Append("\"defaultSize\":").Append(defaultSize.asJson()).Append(",");
+            builder.Append("{\"theme\":{");
+            {
+                builder.Append("\"button\":{");
+                {
+                    builder.Append("\"hovered\":").Append(hoveredColor.asJson()).Append(",");
+                    builder.Append("\"border\":").Append(borderColor.asJson());
+                }
+                builder.Append("},");
+                builder.Append("\"background\":").Append(backgroundColor.asJson()).Append(",");
+                builder.Append("\"foreground\":").Append(foregroundColor.asJson());
+            }
+            builder.Append("},");
+            builder.Append("\"display\":{");
+            {
+                builder.Append("\"defaultSize\":").Append(defaultSize.asJson()).Append(",");
+                builder.Append("\"useVSync\":").Append(useVSync.ToString().ToLower()).Append(",");
+                builder.Append("\"targetFPS\":").Append(targetFPS);
+            }
+            builder.Append("},");
             builder.Append("\"layout\":").Append(layout.asJson());
 
             builder.Append("}");
@@ -34,11 +48,22 @@ namespace TestProgram {
         }
 
         public void load(dynamic dynamic) {
-            if (hasProperty(dynamic, "background")) fillColor(backgroundColor, dynamic.background);
-            if (hasProperty(dynamic, "foreground")) fillColor(foregroundColor, dynamic.foreground);
-            if (hasProperty(dynamic, "hovered")) fillColor(hoveredColor, dynamic.hovered);
-            if (hasProperty(dynamic, "border")) fillColor(borderColor, dynamic.border);
-            if (hasProperty(dynamic, "defaultSize")) fillVec(defaultSize, dynamic.defaultSize);
+            if (hasProperty(dynamic, "theme")) {
+                dynamic theme = dynamic.theme;
+                if (hasProperty(theme, "background")) fillColor(backgroundColor, theme.background);
+                if (hasProperty(theme, "foreground")) fillColor(foregroundColor, theme.foreground);
+                if (hasProperty(theme, "button")) {
+                    dynamic button = theme.button;
+                    if (hasProperty(button, "hovered")) fillColor(hoveredColor, button.hovered);
+                    if (hasProperty(button, "border")) fillColor(borderColor, button.border);
+                }
+            }
+            if (hasProperty(dynamic, "display")) {
+                dynamic display = dynamic.display;
+                if (hasProperty(display, "defaultSize")) fillVec(defaultSize, display.defaultSize);
+                if (hasProperty(display, "useVSync")) useVSync = display.useVSync;
+                if (hasProperty(display, "targetFPS")) targetFPS = (int) display.targetFPS;
+            }
             if (hasProperty(dynamic, "layout")) layout = LayoutConfig.from(dynamic.layout);
         }
 
